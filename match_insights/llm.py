@@ -1,4 +1,4 @@
-"""The single LLM gateway. Provider precedence: Azure OpenAI > GitHub Models > offline templates.
+"""The single LLM gateway. Provider precedence: Microsoft Foundry > Azure OpenAI > GitHub Models > offline templates.
 
 * Azure OpenAI / Azure AI Foundry: AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_DEPLOYMENT + (API key | managed identity).
 * GitHub Models (OpenAI-compatible, Azure-hosted): GITHUB_MODELS_TOKEN or GITHUB_TOKEN, endpoint
@@ -49,11 +49,27 @@ class LLMClient:
         self._lock = threading.Lock()
         self._client, self.provider, self.model = None, "offline", None
         self.min_interval_s = 0.0
+        self._api_style = "chat"
+        foundry_ep = env.get("FOUNDRY_OPENAI_ENDPOINT", "").strip()
+        foundry_key = env.get("FOUNDRY_OPENAI_API_KEY", "").strip()
+        foundry_dep = env.get("FOUNDRY_OPENAI_DEPLOYMENT", "mcr-gpt41-mini").strip()
         az_ep, az_dep = env.get("AZURE_OPENAI_ENDPOINT"), env.get("AZURE_OPENAI_DEPLOYMENT")
         az_key, az_mi = env.get("AZURE_OPENAI_API_KEY"), env.get("AZURE_OPENAI_USE_MANAGED_IDENTITY") == "1"
         gh_token = env.get("GITHUB_MODELS_TOKEN") or env.get("GITHUB_TOKEN")
         try:
-            if az_ep and az_dep and (az_key or az_mi):
+            if foundry_ep and foundry_key and foundry_dep:
+                from openai import OpenAI
+                # This is the /openai/v1 endpoint from the deployed Foundry model's Get code dialog.
+                # A Foundry resource's key must be paired with its own endpoint.
+                if not foundry_ep.rstrip("/").endswith("/openai/v1"):
+                    raise ValueError("FOUNDRY_OPENAI_ENDPOINT must end in /openai/v1/")
+                self._client = OpenAI(base_url=foundry_ep.rstrip("/") + "/", api_key=foundry_key,
+                                      timeout=self.timeout_s, max_retries=0, http_client=http_client)
+                self.provider, self.model = "azure-foundry", foundry_dep
+                self._api_style = "responses"
+                # Avoid sending a large number of model requests during demonstration replays.
+                self.min_interval_s = 60.0 / float(env.get("FOUNDRY_OPENAI_RPM", 10))
+            elif az_ep and az_dep and (az_key or az_mi):
                 from openai import AzureOpenAI
                 kw = dict(azure_endpoint=az_ep, api_version=env.get("AZURE_OPENAI_API_VERSION", "2024-10-21"),
                           timeout=self.timeout_s, max_retries=0, http_client=http_client)
@@ -118,9 +134,18 @@ class LLMClient:
             self._last_call = time.monotonic()
             self.calls += 1
             try:
-                r = self._client.chat.completions.create(model=self.model, max_tokens=max_tokens, temperature=0.5,
-                                                         messages=msgs, **kw)
-                text = (r.choices[0].message.content or "").strip()
+                if self._api_style == "responses":
+                    # Responses API uses instructions/input and max_output_tokens, not Chat Completions args.
+                    args = {"model": self.model, "instructions": system, "input": user,
+                            "max_output_tokens": max_tokens}
+                    if json_mode:
+                        args["text"] = {"format": {"type": "json_object"}}
+                    r = self._client.responses.create(**args)
+                    text = (r.output_text or "").strip()
+                else:
+                    r = self._client.chat.completions.create(model=self.model, max_tokens=max_tokens,
+                                                             temperature=0.5, messages=msgs, **kw)
+                    text = (r.choices[0].message.content or "").strip()
                 if not text:
                     raise ValueError("empty completion")
                 self._fails = 0
