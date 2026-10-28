@@ -1,0 +1,5 @@
+# core runtime (offline-capable)
+fastapi>=0.110,<1
+uvicorn[standard]>=0.29
+pydantic>=2
+openai>=1.40          # Azure OpenAI / Azure AI Foundry client

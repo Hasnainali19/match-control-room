@@ -1,0 +1,22 @@
+{
+ "seeds": 60,
+ "subgroup_s": 90.0,
+ "signal_type": "swing (>=2 metrics agree)",
+ "regime_detection_rate": 0.656,
+ "fatigue_regime_detection_rate": 0.767,
+ "median_detection_delay_min": 5.4,
+ "signals_per_match": 10.9,
+ "false_alarms_per_match": 4.1,
+ "precision": 0.626,
+ "p_goal_within_10min_after_signal": 0.256,
+ "p_goal_within_10min_random_time": 0.171,
+ "lift": 1.5,
+ "rca_fatigue_spell_analysed": 0.767,
+ "rca_named_true_fatigued_player": 0.533,
+ "rca_named_player_and_fatigue_cause": 0.383,
+ "rca_false_fatigue_diagnoses_per_match": 0.67,
+ "goals": 225,
+ "goals_preceded_by_signal_10min": 0.418,
+ "goals_preceded_random_timing_baseline": 0.452,
+ "median_lead_time_min": 2.7
+}

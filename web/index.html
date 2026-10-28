@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match Control Room</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="casual">
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><span>MC</span></div>
+    <div><div class="brand-name">MATCH CONTROL ROOM</div><div class="brand-sub">Live SPC · Root cause · Fact-checked panel</div></div>
+  </div>
+  <div class="scoreboard" id="scoreboard">
+    <div class="team home"><span class="chip" id="homeChip"></span><span class="tname" id="homeName">Home</span></div>
+    <div class="score"><span id="homeScore">0</span><span class="dash">–</span><span id="awayScore">0</span></div>
+    <div class="team away"><span class="tname" id="awayName">Away</span><span class="chip" id="awayChip"></span></div>
+    <div class="clock"><span class="live-dot" id="liveDot"></span><span id="clock">00:00</span></div>
+    <div class="possbar" title="Possession"><div id="possHome"></div></div>
+  </div>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Viewer mode" title="Casual = simple story · Analyst = full statistics (A)">
+      <button data-persona="casual" class="on">Casual</button><button data-persona="analyst">Analyst</button>
+    </div>
+    <button class="btn ghost" id="liveBtn" title="Replay the full 90 minutes (L)">▶ Live</button>
+    <button class="btn primary pulse" id="demoBtn" title="Watch the best moments in about 90 seconds (D)">★ Demo</button>
+    <button class="btn icon dbg-btn" id="dbgBtn" title="Debugger agent: anomalies it has spotted (B)" aria-label="Debugger"><span aria-hidden="true">🐞</span><span class="dbg-count" id="dbgCount">0</span></button>
+    <button class="btn icon" id="helpBtn" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
+    <button class="btn icon" id="settingsBtn" aria-label="Settings" title="Personalise: club, player, language (S)">⚙</button>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="card pitch-card">
+    <div class="card-h"><h2>Live pitch <span class="info" tabindex="0" data-tip="Every pass, shot, tackle and press as it happens. Lines show passes (dashed = lost), rings show pressure.">i</span></h2><div class="meta" id="phaseLbl">Ready when you are: press ★ Demo</div></div>
+    <div class="pitch-wrap">
+      <svg id="pitch" viewBox="-2 -2 109 72" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <pattern id="stripes" width="10.5" height="68" patternUnits="userSpaceOnUse">
+            <rect width="5.25" height="68" fill="#123f2c"/><rect x="5.25" width="5.25" height="68" fill="#15472f"/>
+          </pattern>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#fff"/></marker>
+          <radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+        </defs>
+        <rect x="0" y="0" width="105" height="68" fill="url(#stripes)" rx=".5"/>
+        <g id="laneLayer"></g>
+        <g class="lines" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".3">
+          <rect x="0" y="0" width="105" height="68"/><line x1="52.5" y1="0" x2="52.5" y2="68"/>
+          <circle cx="52.5" cy="34" r="9.15"/><circle cx="52.5" cy="34" r=".4" fill="#fff"/>
+          <rect x="0" y="13.85" width="16.5" height="40.3"/><rect x="88.5" y="13.85" width="16.5" height="40.3"/>
+          <rect x="0" y="24.85" width="5.5" height="18.3"/><rect x="99.5" y="24.85" width="5.5" height="18.3"/>
+          <rect x="-1.5" y="30.34" width="1.5" height="7.32"/><rect x="105" y="30.34" width="1.5" height="7.32"/>
+        </g>
+        <text x="3" y="66" class="pitch-lbl" id="dirHome">→ attacking</text>
+        <g id="trail"></g>
+        <circle id="ballGlow" cx="52.5" cy="34" r="3" fill="url(#glow)"/>
+        <circle id="ball" cx="52.5" cy="34" r=".9" fill="#fff" stroke="#000" stroke-width=".15"/>
+      </svg>
+      <div class="alert" id="alert" hidden>
+        <div class="alert-k">SPC SIGNAL</div><div class="alert-t" id="alertTitle"></div><div class="alert-s" id="alertSub"></div>
+      </div>
+      <div class="focus-chip" id="focusChip" hidden></div>
+      <div class="lower-third" id="lowerThird" hidden>
+        <div class="lt-tag" id="ltTag">LIVE</div>
+        <div class="lt-body"><div class="lt-text" id="ltText"></div><div class="lt-sub" id="ltSub"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card chart-card">
+    <div class="card-h">
+      <h2><span class="analyst-only">Control chart</span><span class="casual-only">Who's on top?</span>
+        <span class="info" tabindex="0" data-tip="Borrowed from factories: each dot is 90 seconds of play. Red dashed lines are the normal range. A pink diamond means a team broke out of its normal pattern: a momentum swing.">i</span></h2>
+      <div class="tabs analyst-only" id="metricTabs"></div>
+      <div class="seg small analyst-only" id="teamSeg"></div>
+    </div>
+    <canvas id="chart" height="230"></canvas>
+    <div class="legend analyst-only"><span><i class="lg pt"></i>subgroup</span><span><i class="lg ew"></i>EWMA</span><span><i class="lg cl"></i>centre line</span><span><i class="lg lim"></i>UCL / LCL (3σ)</span><span><i class="lg sig"></i>out of control</span><span><i class="lg goal"></i>goal</span></div>
+    <div class="legend casual-only"><span id="lgHome"></span><span id="lgAway"></span><span>Momentum index = average shift of 6 control charts (σ)</span></div>
+  </section>
+
+  <section class="card panel-card">
+    <div class="card-h"><h2>Pundit panel <span class="info" tabindex="0" data-tip="Four AI pundits react to goals and momentum swings. A Referee agent checks every number before it goes on air. Vote for your favourite!">i</span></h2><div class="meta" id="panelTrigger">Waiting for a key moment…</div></div>
+    <div id="pundits" class="pundits"></div>
+    <div class="badge-legend"><span class="badge verified">✓ VERIFIED</span> numbers checked
+      <span class="badge corrected">✎ CORRECTED</span> Referee fixed a wrong number
+      <span class="badge flagged">⚠ UNBACKED</span> kept off air</div>
+  </section>
+
+  <section class="card whys-card">
+    <div class="card-h"><h2>5 Whys <span class="tag">root cause</span> <span class="info" tabindex="0" data-tip="A shop-floor problem-solving method: keep asking 'why?' until you reach the real cause, then propose a fix.">i</span></h2><div class="meta" id="whysMeta">—</div></div>
+    <ol id="whys" class="whys"><li class="empty">The Root-Cause agent runs a live 5 Whys every time the control charts flag a momentum swing.</li></ol>
+    <div id="countermeasure" class="countermeasure" hidden></div>
+  </section>
+
+  <section class="card ops-card">
+    <div class="card-h"><h2>Agent ops <span class="info" tabindex="0" data-tip="13 AI agents pass work along this chain. Green = ok, amber = recovered by retry, red = safe fallback. Flip Chaos on to see them survive failures.">i</span></h2>
+      <label class="switch" title="Inject random agent failures"><input type="checkbox" id="chaosToggle"><span></span> Chaos 30%</label>
+    </div>
+    <div class="flow" id="flow"></div>
+    <div class="ops-stats" id="opsStats"></div>
+    <div class="lanes" id="lanes"></div>
+    <ul class="incidents" id="incidents"></ul>
+  </section>
+</main>
+
+<footer class="ticker"><div class="ticker-k">LIVE</div><div class="ticker-track"><div id="tickerInner"></div></div></footer>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-h"><h2>Personalise</h2><button class="btn icon" id="closeDrawer" aria-label="Close">✕</button></div>
+  <label>Viewer mode<select id="persona"><option value="casual">Casual fan</option><option value="analyst">Analyst</option></select></label>
+  <label>Favourite club<select id="club"><option value="">No preference</option></select></label>
+  <label>Focus player (tracks one player)<select id="player"><option value="">Off</option></select></label>
+  <label>Language<select id="lang"></select></label>
+  <p class="hint" id="langHint"></p>
+  <label>Featured pundit<select id="pundit"><option value="">Producer decides (votes)</option></select></label>
+  <label>Live speed <output id="speedOut">30×</output><input type="range" id="speed" min="5" max="120" value="30"></label>
+  <label>Chaos: agent failure rate <output id="faultOut">0%</output><input type="range" id="fault" min="0" max="60" value="0"></label>
+  <label>Match seed<input type="number" id="seed" min="1" max="9999"></label>
+  <button class="btn primary wide" id="applyBtn">Apply &amp; restart</button>
+  <p class="hint">All clubs, players and events are synthetic. No real league data is used.</p>
+</aside>
+<div class="scrim" id="scrim" hidden></div>
+
+<aside class="dbg-panel" id="dbgPanel" hidden aria-label="Debugger agent">
+  <div class="dbg-h"><h2>🐞 Debugger agent</h2><span class="health" id="dbgHealth">idle</span>
+    <button class="btn icon small" id="dbgClose" aria-label="Collapse debugger">▾</button></div>
+  <div class="dbg-sev" id="dbgSev"></div>
+  <ul class="dbg-list" id="dbgList"><li class="empty">All quiet. The Debugger watches every agent call, data check and AI request, and will list anything odd here.</li></ul>
+</aside>
+
+<div class="modal" id="welcome" hidden role="dialog" aria-labelledby="wTitle">
+  <div class="modal-card">
+    <div class="logo big"><span>MC</span></div>
+    <h1 id="wTitle">Welcome to the Match Control Room</h1>
+    <p>Watch a fictional match through the eyes of 13 AI agents. They <b>spot momentum swings</b> with factory-style control charts, <b>explain why</b> with a live 5 Whys, and put <b>fact-checked pundits</b> on air.</p>
+    <ul class="w-steps"><li><b>★ Demo</b> shows the best moments in about 90 seconds</li><li><b>Casual / Analyst</b> sets how deep the stats go</li><li><b>⚙</b> picks your club, a player to follow and your language</li></ul>
+    <div class="w-actions"><button class="btn primary" id="wDemo">★ Start the demo</button><button class="btn ghost" id="wSkip">I'll explore</button></div>
+    <p class="hint">Tip: press <kbd>?</kbd> any time for keyboard shortcuts.</p>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
